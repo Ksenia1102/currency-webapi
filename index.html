@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Курсы валют</title>
     <style>
+        /* Стили остаются без изменений - они хорошие */
         * { 
             margin: 0; 
             padding: 0; 
@@ -437,9 +438,6 @@
                     <div class="status-dot nats" id="nats-status-dot"></div>
                     <span id="nats-status-text">NATS: Отключено</span>
                 </div>
-                <div class="status-info">
-                    <div id="background-task-status">Фоновая задача: ⏸️</div>
-                </div>
             </div>
         </header>
         
@@ -459,9 +457,6 @@
                     <button id="ws-disconnect" class="btn-danger">
                         <i class="fas fa-unlink"></i> Отключить
                     </button>
-                    <button id="ws-ping" class="btn-secondary">
-                        <i class="fas fa-signal"></i> Ping
-                    </button>
                 </div>
                 
                 <div style="margin-top: 20px;">
@@ -475,10 +470,10 @@
                             <div class="stat-value" id="stat-currencies">0</div>
                             <div class="stat-label">Валют</div>
                         </div>
-                        <div class="stat-item">
+                        <!-- <div class="stat-item">
                             <div class="stat-value" id="stat-updates">0</div>
                             <div class="stat-label">Обновлений</div>
-                        </div>
+                        </div> -->
                     </div>
                 </div>
             </div>
@@ -512,7 +507,7 @@
                     <div style="background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 10px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                             <span style="color: #8a8fa3;">Интервал:</span>
-                            <span id="task-interval" style="font-weight: 600;">60 сек</span>
+                            <span id="task-interval" style="font-weight: 600;">30 сек</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
                             <span style="color: #8a8fa3;">Следующий запуск:</span>
@@ -534,7 +529,7 @@
                 </p>
                 
                 <div class="input-group">
-                    <input type="text" id="currency-code" placeholder="Код (USD, EUR)" maxlength="3" style="width: 120px;">
+                    <input type="text" id="currency-code" placeholder="Код (USD, EUR, BTC)" maxlength="3" style="width: 120px;">
                     <input type="text" id="currency-name" placeholder="Название валюты" style="flex: 1;">
                     <input type="number" id="currency-rate" placeholder="Курс" step="0.0001" style="width: 140px;">
                 </div>
@@ -546,21 +541,6 @@
                     <button id="reset-form" class="btn-secondary">
                         <i class="fas fa-redo"></i>
                     </button>
-                </div>
-                
-                <div style="margin-top: 25px;">
-                    <h3 style="margin-bottom: 15px; color: #ffffff; font-size: 16px;">Быстрые действия</h3>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                        <button id="get-currencies" class="btn-secondary">
-                            <i class="fas fa-list"></i> Все валюты
-                        </button>
-                        <button id="get-active" class="btn-secondary">
-                            <i class="fas fa-check-circle"></i> Только активные
-                        </button>
-                        <button id="clear-logs" class="btn-secondary">
-                            <i class="fas fa-trash-alt"></i> Очистить логи
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -610,17 +590,17 @@
                     <button id="export-logs" class="btn-secondary">
                         <i class="fas fa-download"></i> Экспорт логов
                     </button>
-                    <!-- <button id="auto-scroll-toggle" class="btn-secondary active">
-                        <i class="fas fa-arrow-down"></i> Автопрокрутка
-                    </button> -->
+                    <button id="clear-logs" class="btn-secondary">
+                        <i class="fas fa-trash-alt"></i> Очистить логи
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000/api';  // Добавлен /api
-        const WS_URL = 'ws://localhost:8000/ws/currencies';  // Без /api
+        const API_BASE = 'http://localhost:8000/api';
+        const WS_URL = 'ws://localhost:8000/ws/currencies';
         
         let ws = null;
         let currencies = {};
@@ -628,34 +608,28 @@
         let updateCount = 0;
         let logCount = 0;
         let autoScroll = true;
+        let backgroundTaskInterval = 30;
         
-        // Инициализация
         document.addEventListener('DOMContentLoaded', () => {
-            // Обновляем время
+            document.getElementById('task-interval').textContent = `${backgroundTaskInterval} сек`;
+            
             updateLastUpdateTime();
             setInterval(updateLastUpdateTime, 1000);
             
-            // Автоподключение WebSocket
             setTimeout(() => connectWebSocket(), 1000);
-            
-            // Загрузка валют при старте
             setTimeout(() => getCurrencies(), 1500);
             
-            // Инициализация статистики
             updateStats();
             
-            // Назначаем обработчики событий
             initializeEventHandlers();
             
-            // Добавляем начальное сообщение в логи
             addLog('Панель управления валютными курсами инициализирована', 'info');
             addLog('Попытка подключения к WebSocket...', 'info');
         });
         
-        // WebSocket функции
         function connectWebSocket() {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                addLog('ℹWebSocket уже подключен', 'info');
+                addLog('ℹ WebSocket уже подключен', 'info');
                 return;
             }
             
@@ -684,10 +658,10 @@
             
             ws.onclose = (event) => {
                 updateStatus('ws', 'disconnected');
+                updateStatus('nats', 'disconnected');
                 addLog(`WebSocket отключен (код: ${event.code})`, 'error');
                 ws = null;
                 
-                // Попытка переподключения через 5 секунд
                 setTimeout(() => {
                     addLog('Попытка переподключения к WebSocket...', 'info');
                     connectWebSocket();
@@ -722,8 +696,12 @@
             const timestamp = new Date(data.timestamp || Date.now()).toLocaleTimeString();
             
             switch(type) {
-                case 'welcome':
-                    addLog(`${data.message} (ID: ${data.client_id})`, 'success');
+                case 'connected':
+                    updateStatus('ws', 'connected');
+                    if (data.nats_status) {
+                        updateStatus('nats', data.nats_status);
+                    }
+                    addLog(`WebSocket подключен. Клиентов: ${data.active_connections || 0}`, 'success');
                     break;
                     
                 case 'currency_created':
@@ -741,48 +719,39 @@
                     break;
                     
                 case 'currency_deleted':
-                    addLog(`Удалена валюта: ${data.data.currency_code}`, 'warning');
+                    addLog(`Удалена валюта: ${data.data.id}`, 'warning');
                     getCurrencies();
-                    break;
-                    
-                case 'currencies_updated':
-                    addLog(`Обновлены курсы: ${data.data.stats.updated} изменено, ${data.data.stats.created} новых`, 'success');
-                    updateCount += data.data.stats.updated || 0;
-                    updateStats();
-                    getCurrencies();
-                    break;
-                    
-                case 'background_task_started':
-                    document.getElementById('task-status-text').textContent = 'Выполняется...';
-                    document.getElementById('task-loading').style.display = 'block';
-                    addLog('Фоновая задача запущена', 'info');
                     break;
                     
                 case 'background_task_completed':
                     document.getElementById('task-status-text').textContent = 'Завершено';
                     document.getElementById('task-loading').style.display = 'none';
-                    addLog(`Фоновая задача завершена: ${data.data.message}`, 'success');
+                    
+                    const updated = data.data.currencies_updated || 0;
+                    const traditional = data.data.traditional || 0;
+                    const crypto = data.data.crypto || 0;
+                    
+                    let message = `Обновлено ${updated} валют`;
+                    if (traditional > 0 || crypto > 0) {
+                        message += ` (традиционные: ${traditional}, крипто: ${crypto})`;
+                    }
+                    
+                    addLog(`Фоновая задача завершена: ${message}`, 'success');
                     updateNextRunTime();
+                    getCurrencies();
                     break;
                     
                 case 'nats_currency_update':
-                    addLog(` NATS: Обновление ${data.data.currency_code}`, 'info');
+                    addLog(`NATS: Обновление ${data.data.currency_code}`, 'info');
                     updateStatus('nats', 'connected');
                     break;
 
-                case 'connected':
-                    updateStatus('ws', 'connected');
-                    // Обновляем статус NATS из сообщения
-                    if (data.nats_status) {
-                        updateStatus('nats', data.nats_status);
-                    }
-                    break;
-                    
-                case 'nats_message':
-                    addLog(`NATS: ${data.data.type} - ${data.data.currency_code || ''}`, 'info');
+                case 'nats_notification':
+                    addLog(`NATS: ${data.data.type || 'уведомление'}`, 'info');
+                    updateStatus('nats', 'connected');
                     break;
 
-                case 'ping':
+                case 'pong':
                     addLog(`Pong от сервера`, 'info');
                     break;
                     
@@ -790,12 +759,16 @@
                     addLog(`Ошибка: ${data.message}`, 'error');
                     break;
                     
+                case 'info':
+                    addLog(`${data.message || 'Информация'}`, 'info');
+                    break;
+                    
                 default:
-                    addLog(`${type}: ${JSON.stringify(data.data || data.message)}`, 'info');
+                    addLog(`Неизвестный тип: ${type}`, 'warning');
             }
         }
         
-        // API функцииupdateStatus
+        // API функции
         async function apiRequest(method, endpoint, data = null) {
             const url = `${API_BASE}${endpoint}`;
             const options = {
@@ -803,7 +776,8 @@
                 headers: { 
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
-                }
+                },
+                mode: 'cors'
             };
             
             if (data) options.body = JSON.stringify(data);
@@ -819,13 +793,17 @@
                 
                 return await response.json();
             } catch (error) {
-                addLog(`Ошибка запроса: ${error.message}`, 'error');
-                showNotification(`Ошибка: ${error.message}`, 'error');
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    addLog(`CORS/Сетевая ошибка: Проверьте, запущен ли сервер на localhost:8000`, 'error');
+                    showNotification(`Сервер недоступен. Запустите сервер командой: python run.py`, 'error');
+                } else {
+                    addLog(`Ошибка запроса: ${error.message}`, 'error');
+                    showNotification(`Ошибка: ${error.message}`, 'error');
+                }
                 throw error;
             }
         }
         
-        // Функции для работы с валютами
         async function getCurrencies() {
             try {
                 const data = await apiRequest('GET', '/currencies');
@@ -847,7 +825,7 @@
         
         async function getActiveCurrencies() {
             try {
-                const data = await apiRequest('GET', '/currencies?active=true');
+                const data = await apiRequest('GET', '/currencies/active');
                 renderCurrencies(data);
                 addLog(`Загружено ${data.length} активных валют`, 'success');
             } catch (error) {
@@ -863,13 +841,12 @@
                     <div style="text-align: center; padding: 40px; color: #8a8fa3;">
                         <i class="fas fa-coins" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
                         <p>Нет доступных валют</p>
-                        <p style="font-size: 12px; margin-top: 10px;">Используйте форму для добавления валюты</p>
+                        <p style="font-size: 12px; margin-top: 10px;">Используйте форму для добавления валюты или запустите фоновую задачу</p>
                     </div>
                 `;
                 return;
             }
             
-            // Сортируем по коду валюты
             currenciesList.sort((a, b) => a.currency_code.localeCompare(b.currency_code));
             
             container.innerHTML = '';
@@ -878,7 +855,6 @@
                 const currencyEl = document.createElement('div');
                 currencyEl.className = 'currency-card';
                 
-                // Определяем направление изменения
                 if (currency.previous_rate) {
                     const change = currency.rate - currency.previous_rate;
                     if (change > 0) {
@@ -893,38 +869,61 @@
                     Math.abs((change / currency.previous_rate) * 100).toFixed(2) : 0;
                 const changeSign = change >= 0 ? '+' : '';
                 
+                const lastUpdated = currency.last_updated ? 
+                    new Date(currency.last_updated).toLocaleTimeString() : 
+                    new Date(currency.created_at).toLocaleTimeString();
+                
                 currencyEl.innerHTML = `
-                    <div class="currency-header">
-                        <div>
-                            <div class="currency-symbol">${currency.currency_code}</div>
-                            <div class="currency-name">${currency.currency_name}</div>
-                        </div>
+                <div class="currency-header">
+                    <div>
+                        <div class="currency-symbol">${currency.currency_code}</div>
+                        <div class="currency-name">${currency.currency_name}</div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
                         <div class="${currency.is_active ? 'badge badge-active' : 'badge badge-inactive'}">
                             ${currency.is_active ? 'Активна' : 'Неактивна'}
                         </div>
+                        ${currency.is_user_defined ? 
+                            `<div class="badge" style="background: rgba(155, 89, 182, 0.2); color: #9b59b6;">
+                                Пользовательская
+                            </div>` : 
+                            `<div class="badge" style="background: rgba(52, 152, 219, 0.2); color: #3498db;">
+                                Из API
+                            </div>`
+                        }
                     </div>
-                    
-                    <div class="currency-rate">${currency.rate.toFixed(4)}</div>
-                    
-                    ${currency.previous_rate ? `
-                        <div class="currency-change ${change >= 0 ? 'change-up' : 'change-down'}">
-                            <i class="fas fa-${change >= 0 ? 'arrow-up' : 'arrow-down'}"></i>
-                            ${changeSign}${change.toFixed(4)} (${changePercent}%)
-                        </div>
-                    ` : '<div style="height: 24px;"></div>'}
-                    
-                    <div class="currency-meta">
-                        <div>
-                            <i class="fas fa-hashtag"></i> ID: ${currency.id}
-                        </div>
-                        <div>
-                            <i class="fas fa-scale-balanced"></i> Номинал: ${currency.nominal}
-                        </div>
-                        <div>
-                            <i class="fas fa-clock"></i> ${new Date(currency.updated_at).toLocaleTimeString()}
-                        </div>
+                </div>
+                
+                <div class="currency-rate">${currency.rate.toFixed(4)}</div>
+                
+                ${currency.previous_rate ? `
+                    <div class="currency-change ${change >= 0 ? 'change-up' : 'change-down'}">
+                        <i class="fas fa-${change >= 0 ? 'arrow-up' : 'arrow-down'}"></i>
+                        ${changeSign}${change.toFixed(4)} (${changePercent}%)
                     </div>
-                `;
+                ` : '<div style="height: 24px;"></div>'}
+                
+                <div class="currency-meta">
+                    <div>
+                        <i class="fas fa-hashtag"></i> ID: ${currency.id}
+                    </div>
+                    <div>
+                        <i class="fas fa-scale-balanced"></i> Номинал: ${currency.nominal}
+                    </div>
+                    <div>
+                        <i class="fas fa-clock"></i> ${lastUpdated}
+                    </div>
+                    ${currency.is_user_defined ? `
+                        <div style="margin-left: auto;">
+                            <button onclick="deleteCurrency(${currency.id}, '${currency.currency_code}')" 
+                                    class="btn-danger" 
+                                    style="padding: 4px 12px; font-size: 12px;">
+                                <i class="fas fa-trash"></i> Удалить
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
                 
                 container.appendChild(currencyEl);
             });
@@ -936,7 +935,7 @@
             const rate = parseFloat(document.getElementById('currency-rate').value);
             
             if (!code || code.length !== 3) {
-                showNotification('Код валюты должен состоять из 3 букв (например: USD)', 'error');
+                showNotification('Код валюты должен состоять из 3 букв (например: USD, BTC)', 'error');
                 return;
             }
             
@@ -959,7 +958,6 @@
                     is_active: true
                 });
                 
-                // Очищаем форму
                 document.getElementById('currency-code').value = '';
                 document.getElementById('currency-name').value = '';
                 document.getElementById('currency-rate').value = '';
@@ -988,6 +986,22 @@
                 document.getElementById('task-status-text').textContent = 'Ошибка';
             }
         }
+
+        async function deleteCurrency(currencyId, currencyCode) {
+            if (!confirm(`Удалить валюту ${currencyCode}?`)) {
+                return;
+            }
+            
+            try {
+                await apiRequest('DELETE', `/currencies/${currencyId}`);
+                addLog(`Валюта ${currencyCode} удалена`, 'success');
+                showNotification(`Валюта ${currencyCode} удалена`, 'success');
+                getCurrencies();
+            } catch (error) {
+                addLog(`Ошибка удаления: ${error.message}`, 'error');
+                showNotification(`Ошибка: ${error.message}`, 'error');
+            }
+        }
         
         async function getTaskStatus() {
             try {
@@ -1007,6 +1021,10 @@
                     z-index: 1000;
                 `;
                 
+                const lastRunTime = status.last_run ? 
+                    new Date(status.last_run).toLocaleString() : 
+                    'Никогда';
+                
                 modal.innerHTML = `
                     <div style="background: rgba(26, 31, 46, 0.95); padding: 30px; border-radius: 16px; max-width: 500px; width: 90%; border: 1px solid #2a3042;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -1023,15 +1041,11 @@
                             </div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2a3042;">
                                 <span style="color: #8a8fa3;">Интервал:</span>
-                                <span style="font-weight: 600;">${status.interval_seconds} сек</span>
+                                <span style="font-weight: 600;">${status.interval || backgroundTaskInterval} сек</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2a3042;">
                                 <span style="color: #8a8fa3;">Последний запуск:</span>
-                                <span style="font-weight: 600;">${status.last_run || 'Никогда'}</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="color: #8a8fa3;">Следующий запуск:</span>
-                                <span style="font-weight: 600;">${status.next_run_in ? `через ${status.next_run_in} сек` : 'N/A'}</span>
+                                <span style="font-weight: 600;">${lastRunTime}</span>
                             </div>
                         </div>
                         
@@ -1087,10 +1101,6 @@
             logCount++;
             document.getElementById('log-count').textContent = `${logCount} записей`;
             
-            // Автопрокрутка
-            if (autoScroll) {
-                logsEl.scrollTop = logsEl.scrollHeight;
-            }
         }
         
         function updateStatus(type, status) {
@@ -1123,7 +1133,7 @@
         
         function updateStats() {
             document.getElementById('stat-messages').textContent = messageCount;
-            document.getElementById('stat-updates').textContent = updateCount;
+            // document.getElementById('stat-updates').textContent = updateCount;
         }
         
         function updateLastUpdateTime() {
@@ -1134,13 +1144,12 @@
         
         function updateNextRunTime() {
             const now = new Date();
-            const nextRun = new Date(now.getTime() + 60000); // +1 минута
+            const nextRun = new Date(now.getTime() + (backgroundTaskInterval * 1000));
             const timeString = nextRun.toLocaleTimeString();
             document.getElementById('task-next-run').textContent = timeString;
         }
         
         function showNotification(message, type = 'info') {
-            // Создаем временное уведомление
             const notification = document.createElement('div');
             notification.style.cssText = `
                 position: fixed;
@@ -1163,7 +1172,6 @@
             
             document.body.appendChild(notification);
             
-            // Удаляем уведомление через 3 секунды
             setTimeout(() => {
                 notification.style.animation = 'slideOut 0.3s ease';
                 setTimeout(() => notification.remove(), 300);
@@ -1174,9 +1182,6 @@
             // WebSocket кнопки
             document.getElementById('ws-connect').addEventListener('click', connectWebSocket);
             document.getElementById('ws-disconnect').addEventListener('click', disconnectWebSocket);
-            document.getElementById('ws-ping').addEventListener('click', () => {
-                sendWebSocketMessage({ type: 'ping', timestamp: Date.now() });
-            });
             
             // Управление валютами
             document.getElementById('create-currency').addEventListener('click', createCurrency);
@@ -1186,10 +1191,7 @@
                 document.getElementById('currency-rate').value = '';
                 addLog('Форма добавления валюты очищена', 'info');
             });
-            
-            document.getElementById('get-currencies').addEventListener('click', getCurrencies);
-            document.getElementById('get-active').addEventListener('click', getActiveCurrencies);
-            
+                        
             // Фоновые задачи
             document.getElementById('run-task').addEventListener('click', runBackgroundTask);
             document.getElementById('get-task-status').addEventListener('click', getTaskStatus);
@@ -1214,16 +1216,7 @@
                 addLog('Логи экспортированы', 'success');
             });
             
-            document.getElementById('auto-scroll-toggle').addEventListener('click', (e) => {
-                autoScroll = !autoScroll;
-                e.target.classList.toggle('active');
-                e.target.innerHTML = autoScroll ? 
-                    '<i class="fas fa-arrow-down"></i> Автопрокрутка включена' :
-                    '<i class="fas fa-pause"></i> Автопрокрутка выключена';
-                addLog(autoScroll ? 'Автопрокрутка включена' : 'Автопрокрутка выключена', 'info');
-            });
-            
-            // Отправка формы по Enter
+            // Отправка формы
             document.getElementById('currency-code').addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') createCurrency();
             });
@@ -1237,7 +1230,6 @@
             });
         }
         
-        // Добавляем стили для анимаций
         const style = document.createElement('style');
         style.textContent = `
             @keyframes slideIn {

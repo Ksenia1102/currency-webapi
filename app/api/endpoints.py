@@ -1,30 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+# app/api/endpoints.py - ИСПРАВЛЕННЫЙ
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from datetime import datetime
+from app.config import settings
 
-from app.database import get_db
-from app.crud import CurrencyCRUD
-from app.schemas import CurrencyCreate, CurrencyUpdate, CurrencyResponse, BackgroundTaskResponse
+
+from app.db.database import get_db
+from app.db.crud import CurrencyCRUD
+from app.schemas.currency import CurrencyCreate, CurrencyUpdate, CurrencyResponse, BackgroundTaskResponse
 from app.ws.manager import manager
 from app.tasks.background import background_task
 
 router = APIRouter()
-
-# WebSocket endpoint
-# @router.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket):
-#     await manager.connect(websocket)
-#     try:
-#         while True:
-#             data = await websocket.receive_text()
-#             if data == "ping":
-#                 await websocket.send_json({
-#                     "type": "pong",
-#                     "timestamp": datetime.now().isoformat()
-#                 })
-#     except WebSocketDisconnect:
-#         manager.disconnect(websocket)
 
 # REST API endpoints
 @router.get("/currencies", response_model=List[CurrencyResponse])
@@ -140,7 +128,6 @@ async def get_task_status():
     return {
         "running": background_task.is_running,
         "interval": background_task.interval,
-        "last_run": background_task.last_run
+        "last_run": background_task.last_run,
+        "interval_seconds": settings.BACKGROUND_INTERVAL
     }
-    
-    

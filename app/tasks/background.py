@@ -1,389 +1,296 @@
-# import asyncio
-# import httpx
-# import json
-# from datetime import datetime
-# from typing import Dict, List
-# import logging
-
-# from app.config import settings
-# from app.crud import CurrencyCRUD
-# from app.schemas import CurrencyCreate
-# from app.database import AsyncSessionLocal
-# from app.ws.manager import manager
-# from app.nats.client import nats_client
-
-# logger = logging.getLogger(__name__)
-
-# class BackgroundTask:
-#     """Фоновая задача для обновления курсов валют"""
-    
-#     def __init__(self):
-#         self.is_running = False
-#         self.task = None
-#         self.interval = settings.BACKGROUND_INTERVAL
-#         self.last_run = None
-    
-#     async def fetch_cbr_data(self) -> Dict:
-#         """Получение данных с ЦБ РФ"""
-#         async with httpx.AsyncClient(timeout=30.0) as client:
-#             response = await client.get(settings.CBR_API_URL)
-#             response.raise_for_status()
-#             return response.json()
-    
-#     def parse_currencies(self, data: Dict) -> List[Dict]:
-#         """Парсинг данных о валютах"""
-#         currencies = []
-#         valute_data = data.get("Valute", {})
-        
-#         for code, info in valute_data.items():
-#             try:
-#                 currencies.append({
-#                     "currency_code": code,
-#                     "currency_name": info.get("Name", ""),
-#                     "rate": float(info.get("Value", 0)),
-#                     "nominal": int(info.get("Nominal", 1))
-#                 })
-#             except (ValueError, TypeError) as e:
-#                 logger.warning(f"Ошибка парсинга валюты {code}: {e}")
-#                 continue
-        
-#         return currencies
-    
-#     async def update_database(self, currencies: List[Dict]) -> Dict:
-#         """Обновление базы данных"""
-#         stats = {"created": 0, "updated": 0, "errors": 0}
-        
-#         async with AsyncSessionLocal() as db:
-#             for currency_data in currencies:
-#                 try:
-#                     existing = await CurrencyCRUD.get_by_code(db, currency_data["currency_code"])
-                    
-#                     if existing:
-#                         # Обновляем если курс изменился
-#                         if abs(existing.rate - currency_data["rate"]) > 0.0001:
-#                             from app.schemas import CurrencyUpdate
-#                             await CurrencyCRUD.update(
-#                                 db, 
-#                                 existing.id, 
-#                                 CurrencyUpdate(rate=currency_data["rate"])
-#                             )
-#                             stats["updated"] += 1
-                            
-#                             # Публикуем в NATS
-#                             await nats_client.publish_update(existing, currency_data["rate"])
-#                     else:
-#                         # Создаем новую
-#                         await CurrencyCRUD.create(db, CurrencyCreate(**currency_data))
-#                         stats["created"] += 1
-                        
-#                 except Exception as e:
-#                     logger.error(f"Ошибка обновления {currency_data.get('currency_code')}: {e}")
-#                     stats["errors"] += 1
-        
-#         return stats
-    
-#     async def run_once(self) -> Dict:
-#         """Однократный запуск задачи"""
-#         logger.info("Запуск обновления курсов валют...")
-        
-#         try:
-#             # 1. Получаем данные
-#             data = await self.fetch_cbr_data()
-            
-#             # 2. Парсим
-#             currencies = self.parse_currencies(data)
-            
-#             if not currencies:
-#                 raise ValueError("Не удалось получить данные о валютах")
-            
-#             # 3. Обновляем БД
-#             stats = await self.update_database(currencies)
-            
-#             # 4. Отправляем уведомления
-#             await manager.broadcast({
-#                 "type": "currencies_updated",
-#                 "data": stats,
-#                 "timestamp": datetime.now().isoformat()
-#             })
-            
-#             # 5. Публикуем в NATS
-#             await nats_client.publish_task_completed(stats)
-            
-#             self.last_run = datetime.now()
-#             logger.info(f"Обновление завершено. Статистика: {stats}")
-            
-#             return {
-#                 "status": "success",
-#                 "stats": stats,
-#                 "message": f"Обновлено {stats['updated'] + stats['created']} валют"
-#             }
-            
-#         except Exception as e:
-#             logger.error(f"Ошибка фоновой задачи: {e}")
-#             return {
-#                 "status": "error",
-#                 "message": str(e)
-#             }
-    
-#     async def run_periodically(self):
-#         """Периодический запуск задачи"""
-#         self.is_running = True
-#         logger.info(f"Фоновая задача запущена (интервал: {self.interval} сек)")
-        
-#         while self.is_running:
-#             try:
-#                 await self.run_once()
-#             except Exception as e:
-#                 logger.error(f"Критическая ошибка фоновой задачи: {e}")
-            
-#             await asyncio.sleep(self.interval)
-    
-#     def start(self):
-#         """Запуск задачи"""
-#         if not self.is_running:
-#             self.task = asyncio.create_task(self.run_periodically())
-    
-#     def stop(self):
-#         """Остановка задачи"""
-#         self.is_running = False
-#         if self.task:
-#             self.task.cancel()
-
-# # Глобальный экземпляр
-# background_task = BackgroundTask()
-
 import asyncio
-import httpx
 import json
-from datetime import datetime
-from typing import Dict, List
 import logging
+from datetime import datetime
+from typing import Dict, Any
+import httpx
 
 from app.config import settings
-from app.crud import CurrencyCRUD
-from app.schemas import CurrencyCreate, CurrencyUpdate
-from app.database import AsyncSessionLocal
-from app.ws.manager import manager
+from app.db.database import AsyncSessionLocal
+from app.db.crud import CurrencyCRUD
 from app.nats.client import nats_client
+from app.ws.manager import manager
+from app.schemas.currency import CurrencyCreate
 
 logger = logging.getLogger(__name__)
 
 class BackgroundTask:
-    """Фоновая задача для обновления курсов валют"""
+    """Фоновая задача для получения курсов валют"""
     
     def __init__(self):
         self.is_running = False
         self.task = None
-        self.interval = settings.BACKGROUND_INTERVAL
         self.last_run = None
+        self.interval = settings.BACKGROUND_INTERVAL
+        self.client = httpx.AsyncClient(timeout=30.0)
     
-    async def fetch_cbr_data(self) -> Dict:
-        """Получение данных с ЦБ РФ"""
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            logger.info("Запрос данных с ЦБ РФ...")
-            response = await client.get(settings.CBR_API_URL)
+    async def fetch_cbr_rates(self) -> Dict[str, Any]:
+        """Получение курсов валют с ЦБ РФ"""
+        if not settings.ENABLE_TRADITIONAL:
+            return {}
+            
+        try:
+            response = await self.client.get(settings.CBR_API_URL)
             response.raise_for_status()
             data = response.json()
-            logger.info(f"Получено {len(data.get('Valute', {}))} валют с ЦБ РФ")
+            
+            logger.info(f"Получено {len(data.get('Valute', {}))} валют от ЦБ РФ")
             return data
+        except Exception as e:
+            logger.error(f"Ошибка при получении курсов ЦБ: {e}")
+            return {}
     
-    async def fetch_crypto_data(self) -> List[Dict]:
-        """Получение данных о криптовалютах с Binance"""
-        crypto_pairs = {
-            "BTCUSDT": "Bitcoin",
-            "ETHUSDT": "Ethereum", 
-            "BNBUSDT": "Binance Coin",
-            "SOLUSDT": "Solana",
-            "XRPUSDT": "Ripple"
-        }
+    async def fetch_crypto_rates(self) -> Dict[str, float]:
+        """Получение курсов криптовалют"""
+        if not settings.ENABLE_CRYPTO:
+            return {}
         
-        crypto_currencies = []
+        try:
+            params = {
+                'ids': ','.join(settings.CRYPTO_CURRENCIES),
+                'vs_currencies': settings.CRYPTO_VS_CURRENCY
+            }
+            
+            response = await self.client.get(settings.CRYPTO_API_URL, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Преобразуем данные в формат {normalized_code: price}
+            crypto_rates = {}
+            
+            # Маппинг для преобразования названий
+            crypto_mapping = {
+                'bitcoin': 'BTC',
+                'ethereum': 'ETH',
+                'ripple': 'XRP',
+                'litecoin': 'LTC',
+                'cardano': 'ADA',
+                'polkadot': 'DOT',
+                'dogecoin': 'DOGE',
+                'solana': 'SOL'
+            }
+            
+            for crypto_id, rates in data.items():
+                # Получаем нормализованный код
+                normalized_code = crypto_mapping.get(crypto_id.lower(), crypto_id.upper()[:3])
+                price = rates.get(settings.CRYPTO_VS_CURRENCY, 0)
+                
+                if price > 0:
+                    crypto_rates[normalized_code] = price
+            
+            logger.info(f"Получено {len(crypto_rates)} криптовалют")
+            return crypto_rates
+            
+        except Exception as e:
+            logger.error(f"Ошибка при получении курсов криптовалют: {e}")
+            return {}
+    
+    async def process_traditional_rates(self, rates_data: Dict[str, Any]) -> int:
+        """Обработка и сохранение традиционных валют"""
+        if not rates_data or 'Valute' not in rates_data:
+            return 0
         
-        for symbol, name in crypto_pairs.items():
+        updated_count = 0
+        
+        async with AsyncSessionLocal() as session:
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
-                    response = await client.get(url)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        crypto_code = symbol.replace("USDT", "")
-                        
-                        crypto_currencies.append({
-                            "currency_code": crypto_code,
-                            "currency_name": f"{name} (Crypto)",
-                            "rate": float(data['price']),
-                            "nominal": 1
-                        })
-                        
-            except Exception as e:
-                logger.warning(f"Не удалось получить {symbol}: {e}")
-                continue
-        
-        logger.info(f"Получено {len(crypto_currencies)} криптовалют")
-        return crypto_currencies
-    
-    def parse_currencies(self, data: Dict) -> List[Dict]:
-        """Парсинг данных о валютах"""
-        currencies = []
-        valute_data = data.get("Valute", {})
-        
-        # Только основные валюты
-        main_currencies = ["USD", "EUR", "JPY", "CNY", "GBP", "CHF", "CAD", "AUD", "NZD", "SGD"]
-        
-        for code, info in valute_data.items():
-            if code in main_currencies:
-                try:
-                    currencies.append({
-                        "currency_code": code,
-                        "currency_name": info.get("Name", ""),
-                        "rate": float(info.get("Value", 0)),
-                        "nominal": int(info.get("Nominal", 1))
-                    })
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Ошибка парсинга валюты {code}: {e}")
-                    continue
-        
-        return currencies
-    
-    async def update_database(self, currencies: List[Dict]) -> Dict:
-        """Обновление базы данных"""
-        stats = {"created": 0, "updated": 0, "errors": 0}
-        
-        async with AsyncSessionLocal() as db:
-            for currency_data in currencies:
-                try:
-                    existing = await CurrencyCRUD.get_by_code(db, currency_data["currency_code"])
+                valutes = rates_data['Valute']
+                
+                for currency_code, currency_data in valutes.items():
+                    # Проверяем существующую запись
+                    existing = await CurrencyCRUD.get_by_code(session, currency_code)
                     
                     if existing:
-                        # Обновляем если курс изменился
-                        if abs(existing.rate - currency_data["rate"]) > 0.0001:
-                            await CurrencyCRUD.update(
-                                db, 
-                                existing.id, 
-                                CurrencyUpdate(rate=currency_data["rate"])
-                            )
-                            stats["updated"] += 1
-                            
-                            # Публикуем в NATS
-                            await nats_client.publish_update(existing, currency_data["rate"])
+                        # Обновляем существующую запись
+                        await CurrencyCRUD.update(
+                            session, 
+                            existing.id,  # Используем ID существующей записи
+                            {
+                                "rate": currency_data['Value'],
+                                "nominal": currency_data['Nominal'],
+                                "currency_name": currency_data['Name']
+                            }
+                        )
                     else:
-                        # Создаем новую
-                        await CurrencyCRUD.create(db, CurrencyCreate(**currency_data))
-                        stats["created"] += 1
-                        
-                except Exception as e:
-                    logger.error(f"Ошибка обновления {currency_data.get('currency_code')}: {e}")
-                    stats["errors"] += 1
+                        # Создаем новую запись                        
+                        currency_obj = CurrencyCreate(
+                            currency_code=currency_code,
+                            currency_name=currency_data['Name'],
+                            rate=currency_data['Value'],
+                            nominal=currency_data['Nominal'],
+                            is_active=True,
+                            is_user_defined=False
+                        )
+                        await CurrencyCRUD.create(session, currency_obj)
+                    
+                    updated_count += 1
+                
+                await session.commit()
+                logger.info(f"Обработано {updated_count} традиционных валют")
+                
+            except Exception as e:
+                logger.error(f"Ошибка при обработке традиционных валют: {e}")
+                await session.rollback()
         
-        return stats
+        return updated_count
     
-    async def run_once(self) -> Dict:
-        """Однократный запуск задачи"""
-        logger.info("Запуск обновления курсов валют...")
+    async def process_crypto_rates(self, crypto_rates: Dict[str, float]) -> int:
+        """Обработка и сохранение криптовалют"""
+        if not crypto_rates:
+            return 0
         
-        # Отправляем уведомление о начале
+        updated_count = 0
+        
+        async with AsyncSessionLocal() as session:
+            try:
+                for crypto_code, rate in crypto_rates.items():
+                    if rate > 0:
+
+                        crypto_code_mapping = {
+                            'bitcoin': 'BTC',
+                            'ethereum': 'ETH',
+                            'ripple': 'XRP',
+                            'litecoin': 'LTC',
+                            'cardano': 'ADA',
+                            'polkadot': 'DOT',
+                            'dogecoin': 'DOGE',
+                            'solana': 'SOL'
+                        }
+                        
+                        # Преобразуем код криптовалюты
+                        actual_code = crypto_code_mapping.get(crypto_code.lower(), crypto_code.upper()[:3])
+                        
+                        # Проверяем существующую запись
+                        existing = await CurrencyCRUD.get_by_code(session, actual_code)
+                        
+                        crypto_names = {
+                            'BTC': 'Bitcoin',
+                            'ETH': 'Ethereum',
+                            'XRP': 'Ripple',
+                            'LTC': 'Litecoin',
+                            'ADA': 'Cardano',
+                            'DOT': 'Polkadot',
+                            'DOGE': 'Dogecoin',
+                            'SOL': 'Solana'
+                        }
+                        
+                        currency_name = crypto_names.get(actual_code, actual_code)
+                        
+                        if existing:
+                            # Обновляем существующую запись
+                            await CurrencyCRUD.update(
+                                session,
+                                existing.id,  # Используем ID существующей записи
+                                {
+                                    "rate": rate,
+                                    "nominal": 1,
+                                    "currency_name": f"{currency_name} (Crypto)"
+                                }
+                            )
+                        else:
+                            # Создаем новую запись                            
+                            currency_obj = CurrencyCreate(
+                                currency_code=actual_code,
+                                currency_name=f"{currency_name} (Crypto)",
+                                rate=rate,
+                                nominal=1,
+                                is_active=True,
+                                is_user_defined=False
+                            )
+                            await CurrencyCRUD.create(session, currency_obj)
+                        
+                        updated_count += 1
+                
+                await session.commit()
+                logger.info(f"Обработано {updated_count} криптовалют")
+                
+            except Exception as e:
+                logger.error(f"Ошибка при обработке криптовалют: {e}")
+                await session.rollback()
+        
+        return updated_count
+    
+    async def run_once(self) -> Dict[str, Any]:
+        """Однократный запуск задачи"""
+        logger.info("Запуск фоновой задачи...")
+        
+        total_updated = 0
+        traditional_updated = 0
+        crypto_updated = 0
+        
+        # Получаем традиционные валюты
+        if settings.ENABLE_TRADITIONAL:
+            rates_data = await self.fetch_cbr_rates()
+            traditional_updated = await self.process_traditional_rates(rates_data)
+            total_updated += traditional_updated
+        
+        # Получаем криптовалюты
+        if settings.ENABLE_CRYPTO:
+            crypto_rates = await self.fetch_crypto_rates()
+            crypto_updated = await self.process_crypto_rates(crypto_rates)
+            total_updated += crypto_updated
+        
+        # Обновляем время последнего запуска
+        self.last_run = datetime.now()
+        
+        # Публикуем в NATS
+        if nats_client.connected and total_updated > 0:
+            await nats_client.publish_task_completed({
+                "currencies_updated": total_updated,
+                "traditional": traditional_updated,
+                "crypto": crypto_updated,
+                "timestamp": self.last_run.isoformat(),
+                "source": "mixed"
+            })
+        
+        # Отправляем уведомление в WebSocket
         await manager.broadcast({
-            "type": "background_task_started",
-            "data": {"message": "Начинаем обновление курсов"},
+            "type": "background_task_completed",
+            "data": {
+                "currencies_updated": total_updated,
+                "traditional": traditional_updated,
+                "crypto": crypto_updated,
+                "timestamp": self.last_run.isoformat(),
+                "message": f"Обновлено {total_updated} валют"
+            },
             "timestamp": datetime.now().isoformat()
         })
         
-        total_stats = {"created": 0, "updated": 0, "errors": 0}
+        logger.info(f"Фоновая задача завершена. Обновлено: {total_updated} (традиционные: {traditional_updated}, крипто: {crypto_updated})")
         
-        try:
-            # 1. Традиционные валюты с ЦБ РФ
-            try:
-                cbr_data = await self.fetch_cbr_data()
-                traditional_currencies = self.parse_currencies(cbr_data)
-                
-                if traditional_currencies:
-                    stats = await self.update_database(traditional_currencies)
-                    total_stats["created"] += stats["created"]
-                    total_stats["updated"] += stats["updated"]
-                    total_stats["errors"] += stats["errors"]
-                    
-                    logger.info(f"Традиционные валюты: {stats['created']} новых, {stats['updated']} обновлено")
-            
-            except Exception as e:
-                logger.error(f"Ошибка обработки традиционных валют: {e}")
-                total_stats["errors"] += 1
-            
-            # 2. Криптовалюты с Binance
-            try:
-                crypto_currencies = await self.fetch_crypto_data()
-                
-                if crypto_currencies:
-                    stats = await self.update_database(crypto_currencies)
-                    total_stats["created"] += stats["created"]
-                    total_stats["updated"] += stats["updated"]
-                    total_stats["errors"] += stats["errors"]
-                    
-                    logger.info(f"Криптовалюты: {stats['created']} новых, {stats['updated']} обновлено")
-            
-            except Exception as e:
-                logger.error(f"Ошибка обработки криптовалют: {e}")
-                total_stats["errors"] += 1
-            
-            # 3. Отправляем уведомления
-            await manager.broadcast({
-                "type": "currencies_updated",
-                "data": {
-                    "stats": total_stats,
-                    "message": f"Обновлено: {total_stats['updated']} валют, создано: {total_stats['created']} новых"
-                },
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            # 4. Публикуем в NATS
-            await nats_client.publish_task_completed(total_stats)
-            
-            self.last_run = datetime.now()
-            logger.info(f"Обновление завершено. Статистика: {total_stats}")
-            
-            return {
-                "status": "success",
-                "stats": total_stats,
-                "message": f"Обновлено {total_stats['updated'] + total_stats['created']} валют"
-            }
-            
-        except Exception as e:
-            logger.error(f"Ошибка фоновой задачи: {e}")
-            
-            await manager.broadcast({
-                "type": "background_task_error",
-                "data": {"error": str(e)},
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            return {
-                "status": "error",
-                "message": str(e)
-            }
+        return {
+            "currencies_updated": total_updated,
+            "traditional": traditional_updated,
+            "crypto": crypto_updated,
+            "last_run": self.last_run.isoformat(),
+            "status": "completed"
+        }
     
-    async def run_periodically(self):
-        """Периодический запуск задачи"""
+    async def _run_periodically(self):
+        """Запуск задачи периодически"""
         self.is_running = True
-        logger.info(f"Фоновая задача запущена (интервал: {self.interval} сек)")
+        logger.info(f"Фоновая задача запущена с интервалом {self.interval} секунд")
         
         while self.is_running:
             try:
                 await self.run_once()
             except Exception as e:
-                logger.error(f"Критическая ошибка фоновой задачи: {e}")
+                logger.error(f"Ошибка в фоновой задаче: {e}")
             
+            # Ждем указанный интервал
             await asyncio.sleep(self.interval)
     
     def start(self):
-        """Запуск задачи"""
+        """Запуск периодической задачи"""
         if not self.is_running:
-            self.task = asyncio.create_task(self.run_periodically())
+            self.task = asyncio.create_task(self._run_periodically())
     
     def stop(self):
-        """Остановка задачи"""
+        """Остановка периодической задачи"""
         self.is_running = False
         if self.task:
             self.task.cancel()
+        logger.info("Фоновая задача остановлена")
 
 # Глобальный экземпляр
 background_task = BackgroundTask()

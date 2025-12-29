@@ -64,13 +64,24 @@ class NATSClient:
         if not self.connected:
             return
         
+        # currency может быть как объектом модели, так и словарем
+        if hasattr(currency, 'currency_code'):
+            currency_code = currency.currency_code
+            currency_name = currency.currency_name
+            old_rate = currency.rate
+        else:
+            # Если это словарь
+            currency_code = currency.get('currency_code', '')
+            currency_name = currency.get('currency_name', '')
+            old_rate = currency.get('rate', 0)
+        
         message = {
             "type": "currency_updated",
-            "currency_code": currency.currency_code,
-            "currency_name": currency.currency_name,
-            "old_rate": currency.rate,
+            "currency_code": currency_code,
+            "currency_name": currency_name,
+            "old_rate": old_rate,
             "new_rate": new_rate,
-            "change": new_rate - currency.rate,
+            "change": new_rate - old_rate,
             "timestamp": datetime.now().isoformat()
         }
         
@@ -79,9 +90,9 @@ class NATSClient:
                 settings.NATS_UPDATES_CHANNEL,
                 json.dumps(message).encode()
             )
-            logger.info(f"📤 Опубликовано в NATS: {currency.currency_code}")
+            logger.info(f"📤 Опубликовано в NATS: {currency_code}")
             
-            # Также отправляем в WebSocket
+            # отправляем в WebSocket
             from app.ws.manager import manager
             await manager.broadcast({
                 "type": "nats_currency_update",
@@ -89,26 +100,6 @@ class NATSClient:
                 "timestamp": datetime.now().isoformat()
             })
             
-        except Exception as e:
-            logger.error(f"❌ Ошибка публикации в NATS: {e}")
-    
-    async def publish_task_completed(self, stats: Dict[str, Any]):
-        """Публикация события завершения задачи"""
-        if not self.connected:
-            return
-        
-        message = {
-            "type": "background_task_completed",
-            "stats": stats,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        try:
-            await self.nc.publish(
-                settings.NATS_EVENTS_CHANNEL,
-                json.dumps(message).encode()
-            )
-            logger.info("📤 Опубликовано завершение фоновой задачи в NATS")
         except Exception as e:
             logger.error(f"❌ Ошибка публикации в NATS: {e}")
     

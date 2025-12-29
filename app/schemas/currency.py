@@ -8,9 +8,10 @@ class CurrencyBase(BaseModel):
     rate: float = Field(..., gt=0)
     nominal: int = Field(1, gt=0)
     is_active: bool = True
+    is_user_defined: bool = False
 
 class CurrencyCreate(CurrencyBase):
-    pass
+    is_user_defined: bool = True
 
 class CurrencyUpdate(BaseModel):
     currency_name: Optional[str] = None
@@ -24,6 +25,7 @@ class CurrencyResponse(CurrencyBase):
     previous_rate: Optional[float] = None
     last_updated: Optional[datetime] = None
     created_at: datetime
+    is_user_defined: bool 
     
     class Config:
         from_attributes = True

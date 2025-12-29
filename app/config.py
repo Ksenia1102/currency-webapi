@@ -27,6 +27,11 @@ class Settings:
     NATS_UPDATES_CHANNEL = os.getenv("NATS_UPDATES_CHANNEL", "currency.updates")
     NATS_EVENTS_CHANNEL = os.getenv("NATS_EVENTS_CHANNEL", "currency.events")
     NATS_ENABLED = os.getenv("NATS_ENABLED", "false").lower() == "true"
+    
+    # Добавьте в класс Settings:
+    CRYPTO_API_URL = os.getenv("CRYPTO_API_URL", "https://api.coingecko.com/api/v3/simple/price")
+    CRYPTO_CURRENCIES = os.getenv("CRYPTO_CURRENCIES", "bitcoin,ethereum").split(",")
+    CRYPTO_VS_CURRENCY = os.getenv("CRYPTO_VS_CURRENCY", "usd")
 
     # Features
     ENABLE_CRYPTO = os.getenv("ENABLE_CRYPTO", "true").lower() == "true"

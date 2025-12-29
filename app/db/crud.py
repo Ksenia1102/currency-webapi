@@ -1,11 +1,12 @@
+# app/db/crud.py - исправленные импорты
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update, delete
 from typing import List, Optional
 from datetime import datetime
 
-from app.models import CurrencyRate
-from app.schemas import CurrencyCreate, CurrencyUpdate
+from app.models.currency_mod import CurrencyRate
+from app.schemas.currency import CurrencyCreate, CurrencyUpdate
 
 from app.nats.client import nats_client
 
@@ -45,11 +46,16 @@ class CurrencyCRUD:
         """Создать новую валюту"""
         # Проверяем существование
         existing = await CurrencyCRUD.get_by_code(db, currency.currency_code)
-        if existing:
+        if existing:  # ← УБРАТЬ НЕ (было if not existing)
             raise ValueError(f"Валюта с кодом {currency.currency_code} уже существует")
         
         # Вычисляем курс за 1 единицу
         unit_rate = currency.rate / currency.nominal if currency.nominal > 0 else currency.rate
+        
+        # Проверяем, это ручное создание или из фоновой задачи
+        # Если из фоновой задачи - is_user_defined=False, иначе True
+        # Для этого нужно добавить поле is_user_defined в CurrencyCreate схему
+        is_user_defined = getattr(currency, 'is_user_defined', True)
         
         db_currency = CurrencyRate(
             currency_code=currency.currency_code.upper(),
@@ -58,13 +64,18 @@ class CurrencyCRUD:
             nominal=currency.nominal,
             unit_rate=unit_rate,
             previous_rate=None,
-            is_active=currency.is_active
+            is_active=currency.is_active,
+            is_user_defined=is_user_defined  # Добавляем это поле
         )
         
         db.add(db_currency)
         await db.commit()
         await db.refresh(db_currency)
-        await nats_client.publish_currency_update(db_currency, currency.rate)
+        
+        # Публикуем в NATS
+        if nats_client.connected:
+            await nats_client.publish_currency_update(db_currency, currency.rate)
+        
         return db_currency
     
     @staticmethod
@@ -113,6 +124,10 @@ class CurrencyCRUD:
         currency = await CurrencyCRUD.get_by_id(db, currency_id)
         if not currency:
             return False
+        
+        # Проверяем, можно ли удалять - ТОЛЬКО пользовательские
+        if not currency.is_user_defined:
+            raise ValueError(f"Нельзя удалять валюту {currency.currency_code} - она загружена из внешнего API")
         
         await db.delete(currency)
         await db.commit()

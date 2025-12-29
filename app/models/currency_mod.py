@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
 from sqlalchemy.sql import func
 from datetime import datetime
 
-from app.database import Base
+from app.db.database import Base
 
 class CurrencyRate(Base):
     """Модель курса валюты"""
@@ -18,6 +18,8 @@ class CurrencyRate(Base):
     is_active = Column(Boolean, default=True)
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column(DateTime, server_default=func.now())
+    is_user_defined = Column(Boolean, default=False)
+
     
     def to_dict(self):
         return {
@@ -30,5 +32,6 @@ class CurrencyRate(Base):
             "previous_rate": self.previous_rate,
             "is_active": self.is_active,
             "last_updated": self.last_updated.isoformat() if self.last_updated else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "is_user_defined": self.is_user_defined
         }

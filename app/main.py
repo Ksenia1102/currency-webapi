@@ -1,6 +1,6 @@
-# app/main.py
-
+# app/main.py - ИСПРАВЛЕННЫЙ
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -9,7 +9,7 @@ from datetime import datetime
 import json
 
 from app.config import settings
-from app.database import init_db
+from app.db.database import init_db
 from app.api.endpoints import router as api_router
 from app.ws.manager import manager
 from app.tasks.background import background_task
@@ -34,9 +34,12 @@ async def lifespan(app: FastAPI):
     background_task.start()
     logger.info(f"Фоновая задача запущена (интервал: {settings.BACKGROUND_INTERVAL} сек)")
     
+    logger.info("Запуск первичной загрузки валют...")
+    asyncio.create_task(background_task.run_once())
+    
     logger.info("Приложение готово")
     logger.info(f"API: http://localhost:8000/docs")
-    logger.info(f"REST API: http://localhost:8000/api")
+    logger.info(f"REST API: http://localhost:8000{settings.API_PREFIX}")
     logger.info(f"WebSocket: ws://localhost:8000/ws/currencies")
     
     yield
@@ -65,20 +68,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. WebSocket endpoint
+# WebSocket endpoint - ПЕРЕНЕСЕН ИЗ endpoints.py
 @app.websocket("/ws/currencies")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         # Получаем статус NATS
-        from app.nats.client import nats_client
         nats_status = "connected" if nats_client.connected else "disconnected"
         # Отправляем приветственное сообщение
         await websocket.send_json({
             "type": "connected",
             "message": "WebSocket подключен",
             "timestamp": datetime.now().isoformat(),
-            "nats_status": nats_status,  # Добавляем статус NATS
+            "nats_status": nats_status,
             "active_connections": len(manager.active_connections)
         })
         
@@ -106,10 +108,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        print("Client disconnected")
+        logger.info("WebSocket клиент отключен")
 
-# 2. Подключаем REST API роутер С префиксом /api
-app.include_router(api_router, prefix=settings.API_PREFIX)  # /api
+app.include_router(api_router, prefix=settings.API_PREFIX)
 
 @app.get("/")
 async def root():
@@ -117,10 +118,11 @@ async def root():
         "app": settings.APP_NAME,
         "version": settings.VERSION,
         "endpoints": {
-            "currencies": "/api/currencies",
+            "currencies": f"{settings.API_PREFIX}/currencies",
             "websocket": "/ws/currencies",
-            "background_task": "/api/tasks/run",
-            "docs": "/docs"
+            "background_task": f"{settings.API_PREFIX}/tasks/run",
+            "docs": "/docs",
+            "health": "/health"
         }
     }
 
@@ -128,6 +130,8 @@ async def root():
 async def health_check():
     return {
         "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
         "nats": "connected" if nats_client.connected else "disconnected",
-        "background_task": "running" if background_task.is_running else "stopped"
+        "background_task": "running" if background_task.is_running else "stopped",
+        "active_ws_connections": len(manager.active_connections)
     }
