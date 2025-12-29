@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Курсы валют</title>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        
+        body { 
+            background: linear-gradient(135deg, #0a0e17 0%, #1a1f2e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #2a3042;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo-icon {
+            font-size: 32px;
+            background: linear-gradient(45deg, #00d4aa, #0099ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .logo h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(45deg, #ffffff, #00d4aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+            box-shadow: 0 0 10px #dc3545;
+        }
+        
+        .status-dot.connected {
+            background: #00d4aa;
+            box-shadow: 0 0 10px #00d4aa;
+        }
+        
+        .status-dot.nats {
+            background: #ff6b35;
+            box-shadow: 0 0 10px #ff6b35;
+        }
+
+        .status-dot.nats.connected {
+            background: #00d4aa;
+            box-shadow: 0 0 10px #00d4aa;
+        }
+
+        .status-dot.nats.pulse {
+            animation: pulse 1.5s infinite;
+            background: #ff6b35;
+        }
+        
+        .grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 25px; 
+        }
+        
+        @media (max-width: 1200px) { 
+            .grid { grid-template-columns: 1fr 1fr; } 
+        }
+        
+        @media (max-width: 768px) { 
+            .grid { grid-template-columns: 1fr; } 
+        }
+        
+        .card {
+            background: rgba(26, 31, 46, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid #2a3042;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+            border-color: #3a4052;
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #2a3042;
+        }
+        
+        .card-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+        
+        .card-icon {
+            font-size: 20px;
+            color: #00d4aa;
+        }
+        
+        button {
+            padding: 12px 24px;
+            margin: 8px 8px 8px 0;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #00d4aa, #0099ff);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 170, 0.3);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid #3a4052;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(45deg, #ff416c, #ff4b2b);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 65, 108, 0.3);
+        }
+        
+        input, select {
+            padding: 12px 16px;
+            margin: 8px 8px 8px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #3a4052;
+            border-radius: 10px;
+            color: #ffffff;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00d4aa;
+            box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2);
+        }
+        
+        input::placeholder {
+            color: #8a8fa3;
+        }
+        
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .logs {
+            background: rgba(10, 14, 23, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #2a3042;
+        }
+        
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(42, 48, 66, 0.5);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .log-time {
+            color: #8a8fa3;
+            margin-right: 10px;
+        }
+        
+        .currency-card {
+            background: linear-gradient(135deg, rgba(26, 31, 46, 0.8), rgba(42, 48, 66, 0.8));
+            border: 1px solid #2a3042;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 12px 0;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .currency-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: #3a4052;
+            transition: all 0.3s ease;
+        }
+        
+        .currency-card.up::before {
+            background: linear-gradient(to bottom, #00d4aa, #0099ff);
+        }
+        
+        .currency-card.down::before {
+            background: linear-gradient(to bottom, #ff416c, #ff4b2b);
+        }
+        
+        .currency-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .currency-symbol {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        
+        .currency-name {
+            color: #8a8fa3;
+            font-size: 14px;
+        }
+        
+        .currency-rate {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 10px 0;
+            color: #ffffff;
+        }
+        
+        .currency-change {
+            font-size: 14px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            font-weight: 600;
+        }
+        
+        .change-up {
+            background: rgba(0, 212, 170, 0.2);
+            color: #00d4aa;
+        }
+        
+        .change-down {
+            background: rgba(255, 65, 108, 0.2);
+            color: #ff416c;
+        }
+        
+        .currency-meta {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            font-size: 12px;
+            color: #8a8fa3;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 5px 0;
+            color: #ffffff;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #8a8fa3;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .badge-active {
+            background: rgba(0, 212, 170, 0.2);
+            color: #00d4aa;
+        }
+        
+        .badge-inactive {
+            background: rgba(255, 65, 108, 0.2);
+            color: #ff416c;
+        }
+        
+        .connection-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-top: 15px;
+        }
+        
+        .scrollable-container {
+            max-height: 500px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        
+        .scrollable-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollable-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .scrollable-container::-webkit-scrollbar-thumb {
+            background: #3a4052;
+            border-radius: 10px;
+        }
+        
+        .scrollable-container::-webkit-scrollbar-thumb:hover {
+            background: #4a5062;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: #00d4aa;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Заголовок -->
+        <header>
+            <div class="logo">
+                <div class="logo-icon">💰</div>
+                <h1>Курсы валют</h1>
+            </div>
+            <div class="status-indicator">
+                <div class="status-info">
+                    <div class="status-dot" id="ws-status-dot"></div>
+                    <span id="ws-status-text">WebSocket: Отключено</span>
+                </div>
+                <div class="status-info">
+                    <div class="status-dot nats" id="nats-status-dot"></div>
+                    <span id="nats-status-text">NATS: Отключено</span>
+                </div>
+                <div class="status-info">
+                    <div id="background-task-status">Фоновая задача: ⏸️</div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Основная сетка -->
+        <div class="grid">
+            <!-- Колонка 1: Управление соединениями -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-plug card-icon"></i>
+                    <h2>Управление соединениями</h2>
+                </div>
+                
+                <div class="connection-panel">
+                    <button id="ws-connect" class="btn-primary">
+                        <i class="fas fa-link"></i> Подключить WebSocket
+                    </button>
+                    <button id="ws-disconnect" class="btn-danger">
+                        <i class="fas fa-unlink"></i> Отключить
+                    </button>
+                    <button id="ws-ping" class="btn-secondary">
+                        <i class="fas fa-signal"></i> Ping
+                    </button>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h3 style="margin-bottom: 15px; color: #ffffff; font-size: 16px;">Статистика</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="stat-messages">0</div>
+                            <div class="stat-label">Сообщений</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="stat-currencies">0</div>
+                            <div class="stat-label">Валют</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="stat-updates">0</div>
+                            <div class="stat-label">Обновлений</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Колонка 2: Фоновые задачи -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-tasks card-icon"></i>
+                    <h2>Фоновые задачи</h2>
+                </div>
+                
+                <p style="color: #8a8fa3; margin-bottom: 20px; font-size: 14px;">
+                    Автоматическое обновление курсов валют с внешних источников
+                </p>
+                
+                <div class="connection-panel">
+                    <button id="run-task" class="btn-primary">
+                        <i class="fas fa-sync-alt"></i> Запустить сейчас
+                    </button>
+                    <button id="get-task-status" class="btn-secondary">
+                        <i class="fas fa-info-circle"></i> Статус
+                    </button>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                        <div class="loading" id="task-loading" style="display: none;"></div>
+                        <span id="task-status-text">Готово к запуску</span>
+                    </div>
+                    
+                    <div style="background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 10px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span style="color: #8a8fa3;">Интервал:</span>
+                            <span id="task-interval" style="font-weight: 600;">60 сек</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: #8a8fa3;">Следующий запуск:</span>
+                            <span id="task-next-run" style="font-weight: 600;">--:--:--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Колонка 3: Добавление валюты -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-plus-circle card-icon"></i>
+                    <h2>Добавить валюту</h2>
+                </div>
+                
+                <p style="color: #8a8fa3; margin-bottom: 20px; font-size: 14px;">
+                    Добавьте новую валюту в базу данных
+                </p>
+                
+                <div class="input-group">
+                    <input type="text" id="currency-code" placeholder="Код (USD, EUR)" maxlength="3" style="width: 120px;">
+                    <input type="text" id="currency-name" placeholder="Название валюты" style="flex: 1;">
+                    <input type="number" id="currency-rate" placeholder="Курс" step="0.0001" style="width: 140px;">
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button id="create-currency" class="btn-primary" style="flex: 1;">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                    <button id="reset-form" class="btn-secondary">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                </div>
+                
+                <div style="margin-top: 25px;">
+                    <h3 style="margin-bottom: 15px; color: #ffffff; font-size: 16px;">Быстрые действия</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <button id="get-currencies" class="btn-secondary">
+                            <i class="fas fa-list"></i> Все валюты
+                        </button>
+                        <button id="get-active" class="btn-secondary">
+                            <i class="fas fa-check-circle"></i> Только активные
+                        </button>
+                        <button id="clear-logs" class="btn-secondary">
+                            <i class="fas fa-trash-alt"></i> Очистить логи
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Вторая строка: Курсы валют -->
+        <div style="margin-top: 30px;">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-chart-line card-icon"></i>
+                    <h2>Курсы валют в реальном времени</h2>
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                        <span style="color: #8a8fa3; font-size: 14px;">Обновлено:</span>
+                        <span id="last-update-time" style="font-weight: 600;">--:--:--</span>
+                    </div>
+                </div>
+                
+                <div id="currencies-container" class="scrollable-container">
+                    <!-- Валюты будут загружены здесь -->
+                    <div style="text-align: center; padding: 40px; color: #8a8fa3;">
+                        <i class="fas fa-coins" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+                        <p>Загрузка курсов валют...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Третья строка: Логи -->
+        <div style="margin-top: 30px;">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-terminal card-icon"></i>
+                    <h2>Логи событий</h2>
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                        <span id="log-count" style="color: #8a8fa3;">0 записей</span>
+                    </div>
+                </div>
+                
+                <div id="logs" class="logs">
+                    <!-- Логи будут добавляться здесь -->
+                    <div class="log-entry">
+                        <span class="log-time">[--:--:--]</span>
+                        <span>Система инициализирована. Готово к работе.</span>
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+                    <button id="export-logs" class="btn-secondary">
+                        <i class="fas fa-download"></i> Экспорт логов
+                    </button>
+                    <!-- <button id="auto-scroll-toggle" class="btn-secondary active">
+                        <i class="fas fa-arrow-down"></i> Автопрокрутка
+                    </button> -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';  // Добавлен /api
+        const WS_URL = 'ws://localhost:8000/ws/currencies';  // Без /api
+        
+        let ws = null;
+        let currencies = {};
+        let messageCount = 0;
+        let updateCount = 0;
+        let logCount = 0;
+        let autoScroll = true;
+        
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            // Обновляем время
+            updateLastUpdateTime();
+            setInterval(updateLastUpdateTime, 1000);
+            
+            // Автоподключение WebSocket
+            setTimeout(() => connectWebSocket(), 1000);
+            
+            // Загрузка валют при старте
+            setTimeout(() => getCurrencies(), 1500);
+            
+            // Инициализация статистики
+            updateStats();
+            
+            // Назначаем обработчики событий
+            initializeEventHandlers();
+            
+            // Добавляем начальное сообщение в логи
+            addLog('Панель управления валютными курсами инициализирована', 'info');
+            addLog('Попытка подключения к WebSocket...', 'info');
+        });
+        
+        // WebSocket функции
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                addLog('ℹWebSocket уже подключен', 'info');
+                return;
+            }
+            
+            const clientId = `web_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            ws = new WebSocket(`${WS_URL}?client_id=${clientId}`);
+            
+            updateStatus('ws', 'connecting');
+            addLog('Подключение к WebSocket...', 'info');
+            
+            ws.onopen = () => {
+                updateStatus('ws', 'connected');
+                addLog('WebSocket успешно подключен', 'success');
+            };
+            
+            ws.onmessage = (event) => {
+                messageCount++;
+                updateStats();
+                
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    addLog(`Необработанное сообщение: ${event.data}`, 'warning');
+                }
+            };
+            
+            ws.onclose = (event) => {
+                updateStatus('ws', 'disconnected');
+                addLog(`WebSocket отключен (код: ${event.code})`, 'error');
+                ws = null;
+                
+                // Попытка переподключения через 5 секунд
+                setTimeout(() => {
+                    addLog('Попытка переподключения к WebSocket...', 'info');
+                    connectWebSocket();
+                }, 5000);
+            };
+            
+            ws.onerror = (error) => {
+                addLog(`Ошибка WebSocket: ${error.type}`, 'error');
+                updateStatus('ws', 'error');
+            };
+        }
+        
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+        
+        function sendWebSocketMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                addLog(`Отправлено: ${JSON.stringify(message)}`, 'info');
+            } else {
+                addLog('WebSocket не подключен', 'error');
+                showNotification('WebSocket не подключен', 'error');
+            }
+        }
+        
+        function handleWebSocketMessage(data) {
+            const type = data.type;
+            const timestamp = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+            
+            switch(type) {
+                case 'welcome':
+                    addLog(`${data.message} (ID: ${data.client_id})`, 'success');
+                    break;
+                    
+                case 'currency_created':
+                    addLog(`Создана валюта: ${data.data.currency_code} - ${data.data.currency_name}`, 'success');
+                    updateCount++;
+                    updateStats();
+                    getCurrencies();
+                    break;
+                    
+                case 'currency_updated':
+                    addLog(`Обновлена валюта: ${data.data.currency_code} - ${data.data.rate}`, 'info');
+                    updateCount++;
+                    updateStats();
+                    getCurrencies();
+                    break;
+                    
+                case 'currency_deleted':
+                    addLog(`Удалена валюта: ${data.data.currency_code}`, 'warning');
+                    getCurrencies();
+                    break;
+                    
+                case 'currencies_updated':
+                    addLog(`Обновлены курсы: ${data.data.stats.updated} изменено, ${data.data.stats.created} новых`, 'success');
+                    updateCount += data.data.stats.updated || 0;
+                    updateStats();
+                    getCurrencies();
+                    break;
+                    
+                case 'background_task_started':
+                    document.getElementById('task-status-text').textContent = 'Выполняется...';
+                    document.getElementById('task-loading').style.display = 'block';
+                    addLog('Фоновая задача запущена', 'info');
+                    break;
+                    
+                case 'background_task_completed':
+                    document.getElementById('task-status-text').textContent = 'Завершено';
+                    document.getElementById('task-loading').style.display = 'none';
+                    addLog(`Фоновая задача завершена: ${data.data.message}`, 'success');
+                    updateNextRunTime();
+                    break;
+                    
+                case 'nats_currency_update':
+                    addLog(` NATS: Обновление ${data.data.currency_code}`, 'info');
+                    updateStatus('nats', 'connected');
+                    break;
+
+                case 'connected':
+                    updateStatus('ws', 'connected');
+                    // Обновляем статус NATS из сообщения
+                    if (data.nats_status) {
+                        updateStatus('nats', data.nats_status);
+                    }
+                    break;
+                    
+                case 'nats_message':
+                    addLog(`NATS: ${data.data.type} - ${data.data.currency_code || ''}`, 'info');
+                    break;
+
+                case 'ping':
+                    addLog(`Pong от сервера`, 'info');
+                    break;
+                    
+                case 'error':
+                    addLog(`Ошибка: ${data.message}`, 'error');
+                    break;
+                    
+                default:
+                    addLog(`${type}: ${JSON.stringify(data.data || data.message)}`, 'info');
+            }
+        }
+        
+        // API функцииupdateStatus
+        async function apiRequest(method, endpoint, data = null) {
+            const url = `${API_BASE}${endpoint}`;
+            const options = {
+                method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            };
+            
+            if (data) options.body = JSON.stringify(data);
+            
+            try {
+                addLog(`🌐 ${method} ${endpoint}`, 'info');
+                const response = await fetch(url, options);
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+                    throw new Error(error.detail || `HTTP ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                addLog(`Ошибка запроса: ${error.message}`, 'error');
+                showNotification(`Ошибка: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        // Функции для работы с валютами
+        async function getCurrencies() {
+            try {
+                const data = await apiRequest('GET', '/currencies');
+                currencies = data.reduce((acc, curr) => {
+                    acc[curr.currency_code] = curr;
+                    return acc;
+                }, {});
+                
+                renderCurrencies(data);
+                document.getElementById('stat-currencies').textContent = data.length;
+                updateStats();
+                updateLastUpdateTime();
+                
+                addLog(`Загружено ${data.length} валют`, 'success');
+            } catch (error) {
+                console.error('Ошибка получения валют:', error);
+            }
+        }
+        
+        async function getActiveCurrencies() {
+            try {
+                const data = await apiRequest('GET', '/currencies?active=true');
+                renderCurrencies(data);
+                addLog(`Загружено ${data.length} активных валют`, 'success');
+            } catch (error) {
+                console.error('Ошибка получения активных валют:', error);
+            }
+        }
+        
+        function renderCurrencies(currenciesList) {
+            const container = document.getElementById('currencies-container');
+            
+            if (!currenciesList || currenciesList.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #8a8fa3;">
+                        <i class="fas fa-coins" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+                        <p>Нет доступных валют</p>
+                        <p style="font-size: 12px; margin-top: 10px;">Используйте форму для добавления валюты</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Сортируем по коду валюты
+            currenciesList.sort((a, b) => a.currency_code.localeCompare(b.currency_code));
+            
+            container.innerHTML = '';
+            
+            currenciesList.forEach(currency => {
+                const currencyEl = document.createElement('div');
+                currencyEl.className = 'currency-card';
+                
+                // Определяем направление изменения
+                if (currency.previous_rate) {
+                    const change = currency.rate - currency.previous_rate;
+                    if (change > 0) {
+                        currencyEl.classList.add('up');
+                    } else if (change < 0) {
+                        currencyEl.classList.add('down');
+                    }
+                }
+                
+                const change = currency.previous_rate ? currency.rate - currency.previous_rate : 0;
+                const changePercent = currency.previous_rate ? 
+                    Math.abs((change / currency.previous_rate) * 100).toFixed(2) : 0;
+                const changeSign = change >= 0 ? '+' : '';
+                
+                currencyEl.innerHTML = `
+                    <div class="currency-header">
+                        <div>
+                            <div class="currency-symbol">${currency.currency_code}</div>
+                            <div class="currency-name">${currency.currency_name}</div>
+                        </div>
+                        <div class="${currency.is_active ? 'badge badge-active' : 'badge badge-inactive'}">
+                            ${currency.is_active ? 'Активна' : 'Неактивна'}
+                        </div>
+                    </div>
+                    
+                    <div class="currency-rate">${currency.rate.toFixed(4)}</div>
+                    
+                    ${currency.previous_rate ? `
+                        <div class="currency-change ${change >= 0 ? 'change-up' : 'change-down'}">
+                            <i class="fas fa-${change >= 0 ? 'arrow-up' : 'arrow-down'}"></i>
+                            ${changeSign}${change.toFixed(4)} (${changePercent}%)
+                        </div>
+                    ` : '<div style="height: 24px;"></div>'}
+                    
+                    <div class="currency-meta">
+                        <div>
+                            <i class="fas fa-hashtag"></i> ID: ${currency.id}
+                        </div>
+                        <div>
+                            <i class="fas fa-scale-balanced"></i> Номинал: ${currency.nominal}
+                        </div>
+                        <div>
+                            <i class="fas fa-clock"></i> ${new Date(currency.updated_at).toLocaleTimeString()}
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(currencyEl);
+            });
+        }
+        
+        async function createCurrency() {
+            const code = document.getElementById('currency-code').value.trim().toUpperCase();
+            const name = document.getElementById('currency-name').value.trim();
+            const rate = parseFloat(document.getElementById('currency-rate').value);
+            
+            if (!code || code.length !== 3) {
+                showNotification('Код валюты должен состоять из 3 букв (например: USD)', 'error');
+                return;
+            }
+            
+            if (!name) {
+                showNotification('Введите название валюты', 'error');
+                return;
+            }
+            
+            if (isNaN(rate) || rate <= 0) {
+                showNotification('Введите корректный курс валюты', 'error');
+                return;
+            }
+            
+            try {
+                await apiRequest('POST', '/currencies', {
+                    currency_code: code,
+                    currency_name: name,
+                    rate: rate,
+                    nominal: 1,
+                    is_active: true
+                });
+                
+                // Очищаем форму
+                document.getElementById('currency-code').value = '';
+                document.getElementById('currency-name').value = '';
+                document.getElementById('currency-rate').value = '';
+                
+                addLog(`Валюта ${code} успешно добавлена`, 'success');
+                showNotification(`Валюта ${code} добавлена`, 'success');
+                
+                getCurrencies();
+            } catch (error) {
+                console.error('Ошибка создания валюты:', error);
+            }
+        }
+        
+        // Фоновые задачи
+        async function runBackgroundTask() {
+            try {
+                document.getElementById('task-status-text').textContent = 'Запуск...';
+                document.getElementById('task-loading').style.display = 'block';
+                
+                await apiRequest('POST', '/tasks/run');
+                addLog('Фоновая задача запущена вручную', 'success');
+                showNotification('Задача запущена', 'success');
+            } catch (error) {
+                console.error('Ошибка запуска задачи:', error);
+                document.getElementById('task-loading').style.display = 'none';
+                document.getElementById('task-status-text').textContent = 'Ошибка';
+            }
+        }
+        
+        async function getTaskStatus() {
+            try {
+                const status = await apiRequest('GET', '/tasks/status');
+                
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.8);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 1000;
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: rgba(26, 31, 46, 0.95); padding: 30px; border-radius: 16px; max-width: 500px; width: 90%; border: 1px solid #2a3042;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="color: white; font-size: 20px;">Статус фоновой задачи</h3>
+                            <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: none; border: none; color: #8a8fa3; cursor: pointer; font-size: 24px;">×</button>
+                        </div>
+                        
+                        <div style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2a3042;">
+                                <span style="color: #8a8fa3;">Состояние:</span>
+                                <span style="color: ${status.running ? '#00d4aa' : '#ff416c'}; font-weight: 600;">
+                                    ${status.running ? 'Запущена' : 'Остановлена'}
+                                </span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2a3042;">
+                                <span style="color: #8a8fa3;">Интервал:</span>
+                                <span style="font-weight: 600;">${status.interval_seconds} сек</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #2a3042;">
+                                <span style="color: #8a8fa3;">Последний запуск:</span>
+                                <span style="font-weight: 600;">${status.last_run || 'Никогда'}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: #8a8fa3;">Следующий запуск:</span>
+                                <span style="font-weight: 600;">${status.next_run_in ? `через ${status.next_run_in} сек` : 'N/A'}</span>
+                            </div>
+                        </div>
+                        
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()" style="width: 100%; padding: 12px; background: linear-gradient(45deg, #00d4aa, #0099ff); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
+                            Закрыть
+                        </button>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                
+                addLog('Получен статус фоновой задачи', 'info');
+            } catch (error) {
+                console.error('Ошибка получения статуса:', error);
+            }
+        }
+        
+        // Вспомогательные функции
+        function addLog(message, type = 'info') {
+            const logsEl = document.getElementById('logs');
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            
+            let icon = '📝';
+            let color = '#e0e0e0';
+            
+            switch(type) {
+                case 'success':
+                    icon = '✅';
+                    color = '#00d4aa';
+                    break;
+                case 'error':
+                    icon = '❌';
+                    color = '#ff416c';
+                    break;
+                case 'warning':
+                    icon = '⚠️';
+                    color = '#ffb74d';
+                    break;
+                case 'info':
+                    icon = 'ℹ️';
+                    color = '#64b5f6';
+                    break;
+            }
+            
+            logEntry.innerHTML = `
+                <span class="log-time">[${time}]</span>
+                <span style="color: ${color}">${icon} ${message}</span>
+            `;
+            
+            logsEl.appendChild(logEntry);
+            logCount++;
+            document.getElementById('log-count').textContent = `${logCount} записей`;
+            
+            // Автопрокрутка
+            if (autoScroll) {
+                logsEl.scrollTop = logsEl.scrollHeight;
+            }
+        }
+        
+        function updateStatus(type, status) {
+            const dot = document.getElementById(`${type}-status-dot`);
+            const text = document.getElementById(`${type}-status-text`);
+            
+            if (!dot || !text) return;
+            
+            dot.classList.remove('connected', 'disconnected', 'error', 'pulse');
+            
+            switch(status) {
+                case 'connected':
+                    dot.classList.add('connected');
+                    text.textContent = type === 'ws' ? 'WebSocket: Подключено' : 'NATS: Подключено';
+                    break;
+                case 'disconnected':
+                    dot.classList.remove('connected');
+                    text.textContent = type === 'ws' ? 'WebSocket: Отключено' : 'NATS: Отключено';
+                    break;
+                case 'connecting':
+                    dot.classList.add('pulse');
+                    text.textContent = type === 'ws' ? 'WebSocket: Подключение...' : 'NATS: Подключение...';
+                    break;
+                case 'error':
+                    dot.classList.add('pulse');
+                    text.textContent = type === 'ws' ? 'WebSocket: Ошибка' : 'NATS: Ошибка';
+                    break;
+            }
+        }
+        
+        function updateStats() {
+            document.getElementById('stat-messages').textContent = messageCount;
+            document.getElementById('stat-updates').textContent = updateCount;
+        }
+        
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            document.getElementById('last-update-time').textContent = timeString;
+        }
+        
+        function updateNextRunTime() {
+            const now = new Date();
+            const nextRun = new Date(now.getTime() + 60000); // +1 минута
+            const timeString = nextRun.toLocaleTimeString();
+            document.getElementById('task-next-run').textContent = timeString;
+        }
+        
+        function showNotification(message, type = 'info') {
+            // Создаем временное уведомление
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'error' ? 'linear-gradient(45deg, #ff416c, #ff4b2b)' : 
+                           type === 'success' ? 'linear-gradient(45deg, #00d4aa, #0099ff)' : 
+                           'linear-gradient(45deg, #3a4052, #4a5062)'};
+                color: white;
+                padding: 15px 20px;
+                border-radius: 10px;
+                box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+                z-index: 1001;
+                animation: slideIn 0.3s ease;
+                max-width: 300px;
+            `;
+            
+            const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            notification.innerHTML = `${icon} ${message}`;
+            
+            document.body.appendChild(notification);
+            
+            // Удаляем уведомление через 3 секунды
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        
+        function initializeEventHandlers() {
+            // WebSocket кнопки
+            document.getElementById('ws-connect').addEventListener('click', connectWebSocket);
+            document.getElementById('ws-disconnect').addEventListener('click', disconnectWebSocket);
+            document.getElementById('ws-ping').addEventListener('click', () => {
+                sendWebSocketMessage({ type: 'ping', timestamp: Date.now() });
+            });
+            
+            // Управление валютами
+            document.getElementById('create-currency').addEventListener('click', createCurrency);
+            document.getElementById('reset-form').addEventListener('click', () => {
+                document.getElementById('currency-code').value = '';
+                document.getElementById('currency-name').value = '';
+                document.getElementById('currency-rate').value = '';
+                addLog('Форма добавления валюты очищена', 'info');
+            });
+            
+            document.getElementById('get-currencies').addEventListener('click', getCurrencies);
+            document.getElementById('get-active').addEventListener('click', getActiveCurrencies);
+            
+            // Фоновые задачи
+            document.getElementById('run-task').addEventListener('click', runBackgroundTask);
+            document.getElementById('get-task-status').addEventListener('click', getTaskStatus);
+            
+            // Логи
+            document.getElementById('clear-logs').addEventListener('click', () => {
+                document.getElementById('logs').innerHTML = '';
+                logCount = 0;
+                document.getElementById('log-count').textContent = '0 записей';
+                addLog('Логи очищены', 'warning');
+            });
+            
+            document.getElementById('export-logs').addEventListener('click', () => {
+                const logs = document.getElementById('logs').innerText;
+                const blob = new Blob([logs], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `currency-logs-${new Date().toISOString().split('T')[0]}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+                addLog('Логи экспортированы', 'success');
+            });
+            
+            document.getElementById('auto-scroll-toggle').addEventListener('click', (e) => {
+                autoScroll = !autoScroll;
+                e.target.classList.toggle('active');
+                e.target.innerHTML = autoScroll ? 
+                    '<i class="fas fa-arrow-down"></i> Автопрокрутка включена' :
+                    '<i class="fas fa-pause"></i> Автопрокрутка выключена';
+                addLog(autoScroll ? 'Автопрокрутка включена' : 'Автопрокрутка выключена', 'info');
+            });
+            
+            // Отправка формы по Enter
+            document.getElementById('currency-code').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') createCurrency();
+            });
+            
+            document.getElementById('currency-name').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') createCurrency();
+            });
+            
+            document.getElementById('currency-rate').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') createCurrency();
+            });
+        }
+        
+        // Добавляем стили для анимаций
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            
+            .btn-secondary.active {
+                background: linear-gradient(45deg, #00d4aa, #0099ff);
+                color: white;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

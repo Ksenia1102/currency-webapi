@@ -1,0 +1,17 @@
+# FastAPI и сервер
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# База данных
+sqlalchemy==2.0.23
+aiosqlite==0.19.0
+
+# Валидация
+pydantic==2.5.0
+python-dotenv==1.0.1
+
+# HTTP клиент
+httpx==0.25.1
+
+# WebSocket
+websockets==12.0
