@@ -21,7 +21,6 @@ class NATSClient:
             return
         
         try:
-            # ИСПРАВЛЕНО: импорт nats вместо asyncio_nats
             import nats
             
             self.nc = await nats.connect(settings.NATS_URL)
@@ -46,7 +45,7 @@ class NATSClient:
         """Обработка сообщений из NATS"""
         try:
             data = json.loads(msg.data.decode())
-            logger.info(f"📨 NATS сообщение: {data.get('type')}")
+            logger.info(f"NATS сообщение: {data.get('type')}")
             
             # Отправляем уведомление в WebSocket
             from app.ws.manager import manager
@@ -57,11 +56,43 @@ class NATSClient:
             })
             
         except Exception as e:
-            logger.error(f"❌ Ошибка обработки NATS сообщения: {e}")
+            logger.error(f"Ошибка обработки NATS сообщения: {e}")
     
+    async def publish_task_completed(self, stats: Dict[str, Any]):
+        """Публикация события завершения фоновой задачи"""
+        if not self.connected:
+            logger.debug("NATS не подключен, пропускаем публикацию задачи")
+            return
+        
+        message = {
+            "type": "background_task_completed",
+            "stats": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        try:
+            await self.nc.publish(
+                settings.NATS_EVENTS_CHANNEL,
+                json.dumps(message).encode()
+            )
+            logger.info("Опубликовано завершение фоновой задачи в NATS")
+            
+            # Также отправляем в WebSocket
+            from app.ws.manager import manager
+            await manager.broadcast({
+                "type": "nats_task_completed",
+                "data": message,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Ошибка публикации в NATS: {e}")
+
     async def publish_currency_update(self, currency, new_rate: float):
         """Публикация обновления курса валюты"""
         if not self.connected:
+            # Если NATS не подключен, просто логируем
+            logger.debug("NATS не подключен, пропускаем публикацию")
             return
         
         # currency может быть как объектом модели, так и словарем
@@ -109,7 +140,7 @@ class NATSClient:
             await self.nc.drain()
             await self.nc.close()
             self.connected = False
-            logger.info("✅ Отключено от NATS")
+            logger.info("Отключено от NATS")
 
 # Глобальный экземпляр
 nats_client = NATSClient()

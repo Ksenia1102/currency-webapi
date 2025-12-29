@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Курсы валют</title>
     <style>
-        /* Стили остаются без изменений - они хорошие */
         * { 
             margin: 0; 
             padding: 0; 
@@ -319,7 +318,7 @@
         
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 15px;
             margin-top: 20px;
         }
@@ -441,9 +440,8 @@
             </div>
         </header>
         
-        <!-- Основная сетка -->
         <div class="grid">
-            <!-- Колонка 1: Управление соединениями -->
+            <!-- Управление соединениями -->
             <div class="card">
                 <div class="card-header">
                     <i class="fas fa-plug card-icon"></i>
@@ -478,7 +476,7 @@
                 </div>
             </div>
             
-            <!-- Колонка 2: Фоновые задачи -->
+            <!-- Фоновые задачи -->
             <div class="card">
                 <div class="card-header">
                     <i class="fas fa-tasks card-icon"></i>
@@ -517,7 +515,7 @@
                 </div>
             </div>
             
-            <!-- Колонка 3: Добавление валюты -->
+            <!-- Добавление валюты -->
             <div class="card">
                 <div class="card-header">
                     <i class="fas fa-plus-circle card-icon"></i>
@@ -545,7 +543,7 @@
             </div>
         </div>
         
-        <!-- Вторая строка: Курсы валют -->
+        <!-- Курсы валют -->
         <div style="margin-top: 30px;">
             <div class="card">
                 <div class="card-header">
@@ -558,7 +556,7 @@
                 </div>
                 
                 <div id="currencies-container" class="scrollable-container">
-                    <!-- Валюты будут загружены здесь -->
+                    <!-- Валюты-->
                     <div style="text-align: center; padding: 40px; color: #8a8fa3;">
                         <i class="fas fa-coins" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
                         <p>Загрузка курсов валют...</p>
@@ -567,7 +565,7 @@
             </div>
         </div>
         
-        <!-- Третья строка: Логи -->
+        <!-- Логи -->
         <div style="margin-top: 30px;">
             <div class="card">
                 <div class="card-header">
@@ -579,7 +577,7 @@
                 </div>
                 
                 <div id="logs" class="logs">
-                    <!-- Логи будут добавляться здесь -->
+                    <!-- Логи -->
                     <div class="log-entry">
                         <span class="log-time">[--:--:--]</span>
                         <span>Система инициализирована. Готово к работе.</span>
@@ -642,6 +640,12 @@
             ws.onopen = () => {
                 updateStatus('ws', 'connected');
                 addLog('WebSocket успешно подключен', 'success');
+                
+                // Запросить статус NATS у сервера
+                sendWebSocketMessage({ 
+                    type: 'get_nats_status', 
+                    timestamp: Date.now() 
+                });
             };
             
             ws.onmessage = (event) => {
@@ -684,7 +688,6 @@
         function sendWebSocketMessage(message) {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify(message));
-                addLog(`Отправлено: ${JSON.stringify(message)}`, 'info');
             } else {
                 addLog('WebSocket не подключен', 'error');
                 showNotification('WebSocket не подключен', 'error');
@@ -701,7 +704,6 @@
                     if (data.nats_status) {
                         updateStatus('nats', data.nats_status);
                     }
-                    addLog(`WebSocket подключен. Клиентов: ${data.active_connections || 0}`, 'success');
                     break;
                     
                 case 'currency_created':
@@ -751,8 +753,8 @@
                     updateStatus('nats', 'connected');
                     break;
 
-                case 'pong':
-                    addLog(`Pong от сервера`, 'info');
+                case 'nats_status':
+                    updateStatus('nats', data.status);
                     break;
                     
                 case 'error':

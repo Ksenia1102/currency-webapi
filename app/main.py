@@ -23,20 +23,25 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Запуск {settings.APP_NAME} v{settings.VERSION}")
     
-    # 1. Инициализация БД
+    # Инициализация БД
     await init_db()
     logger.info("База данных инициализирована")
     
-    # 2. Подключение к NATS
-    await nats_client.connect()
-    
-    # 3. Запуск фоновой задачи
+    # Запуск фоновой задачи
     background_task.start()
     logger.info(f"Фоновая задача запущена (интервал: {settings.BACKGROUND_INTERVAL} сек)")
     
     logger.info("Запуск первичной загрузки валют...")
     asyncio.create_task(background_task.run_once())
     
+     # Подключение к NATS
+    if settings.NATS_ENABLED:
+        asyncio.create_task(nats_client.connect())
+        logger.info("Попытка подключения к NATS в фоновом режиме...")
+    else:
+        logger.info("NATS отключен в настройках")
+
+        
     logger.info("Приложение готово")
     logger.info(f"API: http://localhost:8000/docs")
     logger.info(f"REST API: http://localhost:8000{settings.API_PREFIX}")
@@ -51,7 +56,8 @@ async def lifespan(app: FastAPI):
     background_task.stop()
     
     # 2. Отключение от NATS
-    await nats_client.disconnect()
+    if nats_client.connected:
+        await nats_client.disconnect()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -68,14 +74,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# WebSocket endpoint - ПЕРЕНЕСЕН ИЗ endpoints.py
 @app.websocket("/ws/currencies")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         # Получаем статус NATS
         nats_status = "connected" if nats_client.connected else "disconnected"
-        # Отправляем приветственное сообщение
+        
+        # Отправляем сообщение
         await websocket.send_json({
             "type": "connected",
             "message": "WebSocket подключен",
@@ -84,6 +90,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "active_connections": len(manager.active_connections)
         })
         
+        # Основной цикл WebSocket
         while True:
             data = await websocket.receive_text()
             try:
@@ -98,7 +105,14 @@ async def websocket_endpoint(websocket: WebSocket):
                         "type": "info",
                         "timestamp": datetime.now().isoformat(),
                         "active_connections": len(manager.active_connections),
-                        "server_time": datetime.now().isoformat()
+                        "server_time": datetime.now().isoformat(),
+                        "nats_status": nats_status
+                    })
+                elif message.get('type') == 'get_nats_status':
+                    await websocket.send_json({
+                        "type": "nats_status",
+                        "status": nats_status,
+                        "timestamp": datetime.now().isoformat()
                     })
             except json.JSONDecodeError:
                 await websocket.send_json({

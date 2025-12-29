@@ -79,32 +79,37 @@ class CurrencyCRUD:
         return db_currency
     
     @staticmethod
-    async def update(db: AsyncSession, currency_id: int, currency_update: CurrencyUpdate) -> Optional[CurrencyRate]:
+    async def update(db: AsyncSession, currency_id: int, currency_update) -> Optional[CurrencyRate]:
         """Обновить валюту"""
         # Получаем текущую валюту
         currency = await CurrencyCRUD.get_by_id(db, currency_id)
         if not currency:
             return None
         
+        # Поддержка как Pydantic модели, так и словаря
+        if hasattr(currency_update, 'model_dump'):
+            update_data = currency_update.model_dump(exclude_unset=True)
+        elif hasattr(currency_update, 'dict'):
+            update_data = currency_update.dict(exclude_unset=True)
+        else:
+            update_data = currency_update 
+        
         # Сохраняем старый курс
         old_rate = currency.rate
         
         # Обновляем только переданные поля
-        update_data = currency_update.model_dump(exclude_unset=True)
-        
         if "rate" in update_data:
             update_data["previous_rate"] = old_rate
             new_nominal = update_data.get("nominal", currency.nominal)
-            update_data["unit_rate"] = update_data["rate"] / new_nominal
+            update_data["unit_rate"] = update_data["rate"] / new_nominal if new_nominal > 0 else update_data["rate"]
             update_data["last_updated"] = datetime.utcnow()
 
             # Публикуем в NATS
             if abs(old_rate - update_data["rate"]) > 0.0001:
                 await nats_client.publish_currency_update(currency, update_data["rate"])
         
-        
         elif "nominal" in update_data:
-            update_data["unit_rate"] = currency.rate / update_data["nominal"]
+            update_data["unit_rate"] = currency.rate / update_data["nominal"] if update_data["nominal"] > 0 else currency.rate
         
         if update_data:
             stmt = (

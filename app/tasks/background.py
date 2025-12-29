@@ -4,10 +4,12 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 import httpx
+from sqlalchemy import select
 
 from app.config import settings
 from app.db.database import AsyncSessionLocal
 from app.db.crud import CurrencyCRUD
+from app.models.currency_mod import CurrencyRate
 from app.nats.client import nats_client
 from app.ws.manager import manager
 from app.schemas.currency import CurrencyCreate
@@ -34,7 +36,19 @@ class BackgroundTask:
             response.raise_for_status()
             data = response.json()
             
-            logger.info(f"Получено {len(data.get('Valute', {}))} валют от ЦБ РФ")
+            # Проверяем структуру данных
+            if 'Valute' not in data:
+                logger.warning("Нет поля 'Valute' в ответе ЦБ РФ")
+                logger.debug(f"Ответ ЦБ: {data}")
+                return {}
+            
+            valutes = data['Valute']
+            logger.info(f"Получено {len(valutes)} валют от ЦБ РФ")
+            
+            # Логируем первые 5 валют для проверки
+            sample = list(valutes.keys())[:10]
+            logger.debug(f"Пример валют: {sample}")
+            
             return data
         except Exception as e:
             logger.error(f"Ошибка при получении курсов ЦБ: {e}")
@@ -55,7 +69,6 @@ class BackgroundTask:
             response.raise_for_status()
             data = response.json()
             
-            # Преобразуем данные в формат {normalized_code: price}
             crypto_rates = {}
             
             # Маппинг для преобразования названий
@@ -97,33 +110,50 @@ class BackgroundTask:
                 valutes = rates_data['Valute']
                 
                 for currency_code, currency_data in valutes.items():
-                    # Проверяем существующую запись
-                    existing = await CurrencyCRUD.get_by_code(session, currency_code)
+                    # Ищем существующую запись
+                    # Используем first() чтобы получить первую запись
+                    result = await session.execute(
+                        select(CurrencyRate)
+                        .where(CurrencyRate.currency_code == currency_code)
+                        .where(CurrencyRate.is_user_defined == False)  # Только не пользовательские
+                        .order_by(CurrencyRate.created_at.desc())
+                        .limit(1)
+                    )
+                    existing = result.scalar_one_or_none()
                     
                     if existing:
-                        # Обновляем существующую запись
-                        await CurrencyCRUD.update(
-                            session, 
-                            existing.id,  # Используем ID существующей записи
-                            {
-                                "rate": currency_data['Value'],
-                                "nominal": currency_data['Nominal'],
-                                "currency_name": currency_data['Name']
-                            }
-                        )
+                        try:
+                            # Обновляем существующую запись
+                            await CurrencyCRUD.update(
+                                session, 
+                                existing.id,
+                                {
+                                    "rate": currency_data['Value'],
+                                    "nominal": currency_data['Nominal'],
+                                    "currency_name": currency_data['Name']
+                                }
+                            )
+                            updated_count += 1
+                        except Exception as e:
+                            logger.error(f"Ошибка обновления {currency_code}: {e}")
+                            continue
                     else:
-                        # Создаем новую запись                        
-                        currency_obj = CurrencyCreate(
-                            currency_code=currency_code,
-                            currency_name=currency_data['Name'],
-                            rate=currency_data['Value'],
-                            nominal=currency_data['Nominal'],
-                            is_active=True,
-                            is_user_defined=False
-                        )
-                        await CurrencyCRUD.create(session, currency_obj)
-                    
-                    updated_count += 1
+                        try:
+                            # Создаем новую запись
+                            currency_obj = CurrencyCreate(
+                                currency_code=currency_code,
+                                currency_name=currency_data['Name'],
+                                rate=currency_data['Value'],
+                                nominal=currency_data['Nominal'],
+                                is_active=True,
+                                is_user_defined=False
+                            )
+                            await CurrencyCRUD.create(session, currency_obj)
+                            updated_count += 1
+                        except Exception as e:
+                            # Если валюта уже существует (например, пользовательская)
+                            logger.warning(f"Валюта {currency_code} уже существует: {e}")
+                            continue
                 
                 await session.commit()
                 logger.info(f"Обработано {updated_count} традиционных валют")

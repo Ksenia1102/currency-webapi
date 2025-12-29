@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # NATS сервер
+  nats:
+    image: nats:latest
+    container_name: currency-nats
+    ports:
+      - "4222:4222"  # NATS клиентский порт
+      - "8222:8222"  # NATS веб-интерфейс
+    command: "-m 8222"
+    networks:
+      - currency-network
+    healthcheck:
+      test: ["CMD", "nats", "server", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Основное приложение
+  api:
+    build: .
+    container_name: currency-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NATS_ENABLED=true
+      - DATABASE_URL=sqlite+aiosqlite:///./currency.db
+      - BACKGROUND_INTERVAL=60
+    volumes:
+      - ./currency.db:/app/currency.db
+      - ./app:/app/app
+    networks:
+      - currency-network
+    command: python run.py
+
+  nats-subscriber:
+    build: .
+    container_name: currency-nats-subscriber
+    depends_on:
+      - nats
+      - api
+    environment:
+      - NATS_URL=nats://nats:4222
+    networks:
+      - currency-network
+    command: python nats_subscriber.py
+    stdin_open: true
+    tty: true
+
+networks:
+  currency-network:
+    driver: bridge
+
+volumes:
+  nats-data:
